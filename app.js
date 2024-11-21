@@ -13,11 +13,20 @@ const server_url = process.env.SERVER_URL;
 // Fungsi untuk memposting data ke server
 const postDataToServer = async (rfidHost, location) => {
   try {
-    const dataToPost = {
-      rfid: rfidHost,
-      location: location
-    };
-    const response = await axios.post(server_url, dataToPost);
+
+    const formData = new FormData();
+    
+   
+    formData.append('rfid_tag', rfidHost);
+    formData.append('area', location);
+    
+   
+    const response = await axios.post(server_url, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data' 
+      }
+    });
+    
     console.log("Data posted to server:", response.data);
   } catch (error) {
     console.error(`Error posting data to server (${rfidHost})`, error.message);
