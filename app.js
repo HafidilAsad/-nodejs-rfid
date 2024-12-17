@@ -11,14 +11,14 @@ const server_url = process.env.SERVER_URL;
 
 
 // Fungsi untuk memposting data ke server
-const postDataToServer = async (rfidHost, location) => {
+const postDataToServer = async (rfidHost, host) => {
   try {
 
     const formData = new FormData();
     
    
     formData.append('rfid_tag', rfidHost);
-    formData.append('area', location);
+    formData.append('ipaddress', host);
     
    
     const response = await axios.post(server_url, formData, {
@@ -29,7 +29,7 @@ const postDataToServer = async (rfidHost, location) => {
     
     console.log("Data posted to server:", response.data);
   } catch (error) {
-    console.error(`Error posting data to server (${rfidHost})`, error.message);
+    console.error(`Error posting data to server rfid:${rfidHost}, ip:${host}`, error.message);
   }
 };
 
@@ -43,9 +43,9 @@ const connectToLocation = (locationData) => {
     console.log(`Connected to ${host}:${port_hf} (${location})`)
 
     // Kirim heartbeat setiap 30 detik
-    setInterval(() => {
-      client.write("Heartbeat");
-    }, 30000);
+    // setInterval(() => {
+    //   client.write("Heartbeat");
+    // }, 30000);
   });
 
   // Tangani data yang diterima
@@ -53,18 +53,25 @@ const connectToLocation = (locationData) => {
     try {
       const startChar = String.fromCharCode(data[0]); // Karakter pertama
       const endChar = String.fromCharCode(data[data.length - 1]); // Karakter terakhir
-      const hexString = data.slice(1, -2).toString(); // Potong simbol awal & akhir, konversi ke string
-      const decimalValue = parseInt(hexString, 16); // Konversi ke desimal
-
-      const rfidHost = `${decimalValue}`;
-      console.log(`Data RFID (${location})`, `${startChar}${rfidHost}${endChar})`)
-
+      
+      // Potong simbol awal & akhir, konversi ke string
+      const hexString = data.slice(1, -2).toString(); 
+      
+      // Konversi hex ke string desimal
+      const decimalValue = BigInt(`0x${hexString}`).toString(); 
+  
+      // Tambahkan nol di depan jika panjangnya kurang dari 10
+      const rfidHost = decimalValue.padStart(10, '0');
+      console.log(`Data RFID (${location})`, `${startChar}${rfidHost}${endChar}`);
+  
       // Post data ke server
-      postDataToServer(rfidHost, location);
+      postDataToServer(rfidHost, host);
     } catch (err) {
-      console.error(`Error processing data (${location}):, err.message`);
+      console.error(`Error processing data (${location}): ${err.message}`);
     }
   });
+  
+  
 
   // Tangani koneksi yang ditutup
   client.on("close", () => {
@@ -74,7 +81,10 @@ const connectToLocation = (locationData) => {
   // Tangani error
   client.on("error", (err) => {
     console.error(`Error for ${host} (${location})`, err.message)
-    process.exit(1);
+    setTimeout(() => {
+      process.exit(1);
+    }, 5*1000);
+   
   });
 };
 
