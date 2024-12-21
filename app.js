@@ -85,7 +85,7 @@ const connectToLocation = (locationData) => {
 // Fungsi untuk mendapatkan data lokasi dari API atau file lokal
 const getLocationData = async () => {
   try {
-    logger.log("Fetching location data from API...");
+    logger.log(`Fetching location data from API ${url_server_hag}/api/nfc-reader/show`);	
     const response = await axios.get(`${url_server_hag}/api/nfc-reader/sho`);
     if (response.data.status === "success" && Array.isArray(response.data.data)) {
       return response.data.data.map((item) => ({
