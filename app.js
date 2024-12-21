@@ -1,35 +1,32 @@
 const net = require("net");
-const dotenv = require('dotenv');
-const axios = require('axios');
-const datas_location = require("./data/location");
+const dotenv = require("dotenv");
+const axios = require("axios");
+const logger = require('./utils/logger');
+
+// const datas_location = require("./data/location"); // Ganti dengan path ke file data lokasi
 
 dotenv.config();
 
 const port_hf = process.env.PORT_HF;
 const server_url = process.env.SERVER_URL;
-
-
+const url_server_hag = process.env.URL_SERVER_HAG;
 
 // Fungsi untuk memposting data ke server
 const postDataToServer = async (rfidHost, host) => {
   try {
-
     const formData = new FormData();
-    
-   
-    formData.append('rfid_tag', rfidHost);
-    formData.append('ipaddress', host);
-    
-   
-    const response = await axios.post(server_url, formData, {
+    formData.append("rfid_tag", rfidHost);
+    formData.append("ipaddress", host);
+
+    const response = await axios.post(`${url_server_hag}/api/tap-on-area`, formData, {
       headers: {
-        'Content-Type': 'multipart/form-data' 
-      }
+        "Content-Type": "multipart/form-data",
+      },
     });
-    
-    console.log("Data posted to server:", response.data);
+
+    logger.log(`Data posted to server ${url_server_hag}/api/tap-on-area rfid:${rfidHost}, ip:${host}`, response.data);
   } catch (error) {
-    console.error(`Error posting data to server rfid:${rfidHost}, ip:${host}`, error.message);
+    logger.errorLogger(`Error posting data to server ${url_server_hag}/api/tap-on-area rfid:${rfidHost}, ip:${host} : Error is  ${error.message}`, );
   }
 };
 
@@ -40,12 +37,12 @@ const connectToLocation = (locationData) => {
   const client = new net.Socket();
 
   client.connect(port_hf, host, () => {
-    console.log(`Connected to ${host}:${port_hf} (${location})`)
+    logger.log(`Connected to ${host}:${port_hf} (${location})`);
 
     // Kirim heartbeat setiap 30 detik
-    // setInterval(() => {
-    //   client.write("Heartbeat");
-    // }, 30000);
+    setInterval(() => {
+      client.write("0");
+    }, 3 * 1000);
   });
 
   // Tangani data yang diterima
@@ -53,25 +50,23 @@ const connectToLocation = (locationData) => {
     try {
       const startChar = String.fromCharCode(data[0]); // Karakter pertama
       const endChar = String.fromCharCode(data[data.length - 1]); // Karakter terakhir
-      
+
       // Potong simbol awal & akhir, konversi ke string
-      const hexString = data.slice(1, -2).toString(); 
-      
+      const hexString = data.slice(1, -2).toString();
+
       // Konversi hex ke string desimal
-      const decimalValue = BigInt(`0x${hexString}`).toString(); 
-  
+      const decimalValue = BigInt(`0x${hexString}`).toString();
+
       // Tambahkan nol di depan jika panjangnya kurang dari 10
-      const rfidHost = decimalValue.padStart(10, '0');
-      console.log(`Data RFID (${location})`, `${startChar}${rfidHost}${endChar}`);
-  
+      const rfidHost = decimalValue.padStart(10, "0");
+     logger.log(`Data RFID :${rfidHost}, LOCATION ${location} ${startChar}  ${endChar}`);
+
       // Post data ke server
       postDataToServer(rfidHost, host);
     } catch (err) {
-      console.error(`Error processing data (${location}): ${err.message}`);
+      logger.errorLogger(`Error processing data (${location}): ${err.message}`);
     }
   });
-  
-  
 
   // Tangani koneksi yang ditutup
   client.on("close", () => {
@@ -80,15 +75,42 @@ const connectToLocation = (locationData) => {
 
   // Tangani error
   client.on("error", (err) => {
-    console.error(`Error for ${host} (${location})`, err.message)
+    logger.errorLogger(`Error for ${host} (${location})`, err.message);
     setTimeout(() => {
       process.exit(1);
-    }, 5*1000);
-   
+    }, 5 * 1000);
   });
 };
 
-// Buat koneksi untuk setiap lokasi     
-datas_location.forEach((locationData) => {
-  connectToLocation(locationData);
-});
+// Fungsi untuk mendapatkan data lokasi dari API atau file lokal
+const getLocationData = async () => {
+  try {
+    logger.log("Fetching location data from API...");
+    const response = await axios.get(`${url_server_hag}/api/nfc-reader/sho`);
+    if (response.data.status === "success" && Array.isArray(response.data.data)) {
+      return response.data.data.map((item) => ({
+        location: item.area || "Unknown Area",
+        host: item.ipaddress,
+      }));
+    } else {
+      throw new Error("Invalid API response format.");
+    }
+    
+  } catch (error) {
+    logger.errorLogger(`Error fetching location data from API ${url_server_hag}/api/nfc-reader/show : Error is  ${error.message}`);
+    return require("./data/location");
+  }
+};
+
+// Inisialisasi koneksi untuk setiap lokasi
+(async () => {
+  const datas_location = await getLocationData();
+  datas_location.forEach((locationData) => {
+    connectToLocation(locationData);
+  });
+})();
+
+// jika menggunakan data lokal
+// datas_location.forEach((locationData) => {
+//   connectToLocation(locationData);
+// });
