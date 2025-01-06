@@ -86,7 +86,7 @@ const connectToLocation = (locationData) => {
 const getLocationData = async () => {
   try {
     logger.log(`Fetching location data from API ${url_server_hag}/api/nfc-reader/show`);	
-    const response = await axios.get(`${url_server_hag}/api/nfc-reader/sho`);
+    const response = await axios.get(`${url_server_hag}/api/nfc-reader/show`);
     if (response.data.status === "success" && Array.isArray(response.data.data)) {
       return response.data.data.map((item) => ({
         location: item.area || "Unknown Area",
